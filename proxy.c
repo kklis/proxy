@@ -1,5 +1,5 @@
 /*
- * Go memcache client package
+ * Tiny TCP proxy server
  *
  * Author: Krzysztof Kliś <krzysztof.klis@gmail.com>
  *

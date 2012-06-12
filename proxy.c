@@ -94,10 +94,14 @@ int main(int argc, char *argv[]) {
 
 /* Create server socket */
 int create_socket(int port) {
-    int server_sock;
+    int server_sock, optval;
     struct sockaddr_in server_addr;
 
     if ((server_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        return -1;
+    }
+
+    if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
         return -1;
     }
 

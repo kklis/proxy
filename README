@@ -16,9 +16,14 @@ and follow instructions in the "tools/README.TXT" file.
 
 Command line syntax goes as follows:
 
-proxy local_port remote_host remote_port
+proxy -l local_port -h remote_host -p remote_port [-i "input parser"] [-o "output parser"]
 
 Suppose you want to open port 8080 on a public host and forward all TCP packets to port 80 on machine 192.168.1.2 in the local network. In this case you install proxy on a public host and run it the following command:
 
-./proxy 8080 192.168.1.2 80
+proxy -l 8080 -h 192.168.1.2 -p 80
 
+Input parser and output parser are commands through which incoming and outgoing packets can be forwarded. For example to use a "tee" command to log all incoming http data in incoming.txt file you can start proxy with the following options:
+
+proxy -l 8080 -h 192.168.1.2 -p 80 -i "tee -a incoming.txt"
+
+The parser command will receive data from socket to its standard input and should send parsed data to the standard output. It should also flush its output at a reasonable rate to not withhold network communication.

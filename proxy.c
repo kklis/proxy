@@ -42,6 +42,8 @@
 #include <wait.h>
 
 #define BUF_SIZE 1024
+#define READ  0
+#define WRITE 1
 
 typedef enum {TRUE = 1, FALSE = 0} bool;
 
@@ -51,24 +53,28 @@ void sigterm_handler(int signal);
 void server_loop();
 void handle_client(int client_sock, struct sockaddr_in client_addr);
 void forward_data(int source_sock, int destination_sock);
+void forward_data_ext(int source_sock, int destination_sock, char *cmd[]);
+int parse_options(int argc, char *argv[]);
+void string_to_array(char *str, char *array[]);
 
 int server_sock, client_sock, remote_sock, remote_port;
 char *remote_host;
+bool opt_in = FALSE, opt_out = FALSE;
+char *cmd_in[100] = {NULL};
+char *cmd_out[100] = {NULL};
 
 /* Program start */
 int main(int argc, char *argv[]) {
-    int local_port;
+    int c, local_port;
     pid_t pid;
     struct sigaction sa;
 
-    if (argc < 4) {
-        printf("Syntax: %s local_port remote_host remote_port\n", argv[0]);
+    local_port = parse_options(argc, argv);
+
+    if (local_port < 0) {
+        printf("Syntax: %s -l local_port -h remote_host -p remote_port [-i \"input parser\"] [-o \"output parser\"]\n", argv[0]);
         return 0;
     }
-
-    local_port = atoi(argv[1]);
-    remote_host = argv[2];
-    remote_port = atoi(argv[3]);
 
     if ((server_sock = create_socket(local_port)) < 0) { // start server
         perror("Cannot run server");
@@ -90,6 +96,60 @@ int main(int argc, char *argv[]) {
     }
 
     return 0;
+}
+
+/* Parse command line options */
+int parse_options(int argc, char *argv[]) {
+    bool l,h,p,i,o;
+    int c, local_port;
+
+    l = h = p = i = o = FALSE;
+
+    while ((c = getopt(argc, argv, "l:h:p:i:o:")) != -1) {
+        switch(c) {
+            case 'l':
+                local_port = atoi(optarg);
+                l = TRUE;
+                break;
+            case 'h':
+                remote_host = optarg;
+                h = TRUE;
+                break;
+            case 'p':
+                remote_port = atoi(optarg);
+                p = TRUE;
+                break;
+            case 'i':
+                opt_in = TRUE;
+                string_to_array(optarg, cmd_in);
+                break;
+            case 'o':
+                opt_out = TRUE;
+                string_to_array(optarg, cmd_out);
+                break;
+        }
+    }
+
+    if (l && h && p) {
+        return local_port;
+    } else {
+        return -1;
+    }
+}
+
+/* Tokenize string into array by space */
+void string_to_array(char *str, char *array[]) {
+    char *p;
+    int c = 1, n;
+
+    array[0] = str;
+    for (p = str; *p != '\0'; ++p) {
+        if (*p == ' ') {
+            *p = '\0';
+            array[c++] = p+1;
+        }
+    }
+    array[c++] = NULL;
 }
 
 /* Create server socket */
@@ -159,12 +219,20 @@ void handle_client(int client_sock, struct sockaddr_in client_addr)
     }
 
     if (fork() == 0) { // a process forwarding data from client to remote socket
-        forward_data(client_sock, remote_sock);
+        if (opt_out) {
+            forward_data_ext(client_sock, remote_sock, cmd_out);
+        } else {
+            forward_data(client_sock, remote_sock);
+        }
         exit(0);
     }
 
     if (fork() == 0) { // a process forwarding data from remote socket to client
-        forward_data(remote_sock, client_sock);
+        if (opt_in) {
+            forward_data_ext(remote_sock, client_sock, cmd_in);
+        } else {
+            forward_data(remote_sock, client_sock);
+        }
         exit(0);
     }
 
@@ -177,8 +245,8 @@ void forward_data(int source_sock, int destination_sock) {
     char buffer[BUF_SIZE];
     int n;
 
-    while ((n = recv(source_sock, buffer, BUF_SIZE, 0)) > 0) {
-        send(destination_sock, buffer, n, 0);
+    while ((n = recv(source_sock, buffer, BUF_SIZE, 0)) > 0) { // read data from input socket
+        send(destination_sock, buffer, n, 0); // send data to output socket
     }
 
     shutdown(destination_sock, SHUT_RDWR); // stop other processes from using socket
@@ -186,6 +254,39 @@ void forward_data(int source_sock, int destination_sock) {
 
     shutdown(source_sock, SHUT_RDWR); // stop other processes from using socket
     close(source_sock);
+}
+
+/* Forward data between sockets through external command */
+void forward_data_ext(int source_sock, int destination_sock, char *cmd[]) {
+    char buffer[BUF_SIZE];
+    int n, i, pipe_in[2], pipe_out[2];
+
+    pipe(pipe_in);
+    pipe(pipe_out);
+
+    if (fork() == 0) {
+        dup2(pipe_in[READ], STDIN_FILENO); // redirect stdin to pipe_in
+        close(pipe_in[WRITE]); // no need to write to pipe_in here
+        dup2(pipe_out[WRITE], STDOUT_FILENO); // redirect stdout to pipe_out
+        close(pipe_out[READ]); // no need to read pipe_out here
+        execvp(cmd[0], cmd); // execute command
+        exit(0);
+    } else {
+        close(pipe_in[READ]); // no need to read pipe_in here
+        close(pipe_out[WRITE]); // no need to write to pipe_out here
+
+        while ((n = recv(source_sock, buffer, BUF_SIZE, 0)) > 0) { // read data from input socket
+            write(pipe_in[WRITE], buffer, n); // write data to stdin of external command
+            i = read(pipe_out[READ], buffer, BUF_SIZE); // read command output
+            send(destination_sock, buffer, i, 0); // send data to output socket
+        }
+
+        shutdown(destination_sock, SHUT_RDWR); // stop other processes from using socket
+        close(destination_sock);
+
+        shutdown(source_sock, SHUT_RDWR); // stop other processes from using socket
+        close(source_sock);
+    }
 }
 
 /* Create client connection */

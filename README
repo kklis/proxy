@@ -22,7 +22,7 @@ Suppose you want to open port 8080 on a public host and forward all TCP packets 
 
 proxy -l 8080 -h 192.168.1.2 -p 80
 
-Input parser and output parser are commands through which incoming and outgoing packets can be forwarded. For example to use a "tee" command to log all incoming http data in incoming.txt file you can start proxy with the following options:
+Input parser and output parser are commands through which incoming and outgoing packets can be forwarded. For example to use a "tee" command to log all incoming http data to incoming.txt file you can start proxy with the following options:
 
 proxy -l 8080 -h 192.168.1.2 -p 80 -i "tee -a incoming.txt"
 

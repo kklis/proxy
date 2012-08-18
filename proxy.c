@@ -67,7 +67,6 @@ char *cmd_out[100] = {NULL};
 int main(int argc, char *argv[]) {
     int c, local_port;
     pid_t pid;
-    struct sigaction sa;
 
     local_port = parse_options(argc, argv);
 
@@ -261,22 +260,22 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd[]) {
     char buffer[BUF_SIZE];
     int n, i, pipe_in[2], pipe_out[2];
 
-    pipe(pipe_in);
-    pipe(pipe_out);
+    pipe(pipe_in); // command input pipe
+    pipe(pipe_out); // command output pipe
 
     if (fork() == 0) {
-        dup2(pipe_in[READ], STDIN_FILENO); // redirect stdin to pipe_in
-        close(pipe_in[WRITE]); // no need to write to pipe_in here
-        dup2(pipe_out[WRITE], STDOUT_FILENO); // redirect stdout to pipe_out
-        close(pipe_out[READ]); // no need to read pipe_out here
-        execvp(cmd[0], cmd); // execute command
-        exit(0);
+        dup2(pipe_in[READ], STDIN_FILENO); // redirect stdin to input pipe
+        close(pipe_in[WRITE]); // no need to write to input pipe here
+        dup2(pipe_out[WRITE], STDOUT_FILENO); // redirect stdout to output pipe
+        close(pipe_out[READ]); // no need to read output pipe here
+        n = execvp(cmd[0], cmd); // execute command
+        exit(n);
     } else {
-        close(pipe_in[READ]); // no need to read pipe_in here
-        close(pipe_out[WRITE]); // no need to write to pipe_out here
+        close(pipe_in[READ]); // no need to read input pipe here
+        close(pipe_out[WRITE]); // no need to write to output pipe here
 
         while ((n = recv(source_sock, buffer, BUF_SIZE, 0)) > 0) { // read data from input socket
-            write(pipe_in[WRITE], buffer, n); // write data to stdin of external command
+            write(pipe_in[WRITE], buffer, n); // write data to input pipe of external command
             i = read(pipe_out[READ], buffer, BUF_SIZE); // read command output
             send(destination_sock, buffer, i, 0); // send data to output socket
         }

@@ -260,8 +260,10 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd[]) {
     char buffer[BUF_SIZE];
     int n, i, pipe_in[2], pipe_out[2];
 
-    pipe(pipe_in); // command input pipe
-    pipe(pipe_out); // command output pipe
+    if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) {  // create command input and output pipes
+        perror("Cannot create pipe");
+        exit(EXIT_FAILURE);
+    }
 
     if (fork() == 0) {
         dup2(pipe_in[READ], STDIN_FILENO); // redirect stdin to input pipe
@@ -275,9 +277,13 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd[]) {
         close(pipe_out[WRITE]); // no need to write to output pipe here
 
         while ((n = recv(source_sock, buffer, BUF_SIZE, 0)) > 0) { // read data from input socket
-            write(pipe_in[WRITE], buffer, n); // write data to input pipe of external command
-            i = read(pipe_out[READ], buffer, BUF_SIZE); // read command output
-            send(destination_sock, buffer, i, 0); // send data to output socket
+            if (write(pipe_in[WRITE], buffer, n) < 0) { // write data to input pipe of external command
+                perror("Cannot write to pipe");
+                exit(EXIT_FAILURE);
+            }
+            if ((i = read(pipe_out[READ], buffer, BUF_SIZE)) > 0) { // read command output
+                send(destination_sock, buffer, i, 0); // send data to output socket
+            }
         }
 
         shutdown(destination_sock, SHUT_RDWR); // stop other processes from using socket

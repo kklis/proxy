@@ -99,10 +99,10 @@ int main(int argc, char *argv[]) {
 
 /* Parse command line options */
 int parse_options(int argc, char *argv[]) {
-    bool l,h,p,i,o;
+    bool l,h,p;
     int c, local_port;
 
-    l = h = p = i = o = FALSE;
+    l = h = p = FALSE;
 
     while ((c = getopt(argc, argv, "l:h:p:i:o:")) != -1) {
         switch(c) {
@@ -260,20 +260,20 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd[]) {
     char buffer[BUF_SIZE];
     int n, i, pipe_in[2], pipe_out[2];
 
-    if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) {  // create command input and output pipes
+    if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) { // create command input and output pipes
         perror("Cannot create pipe");
         exit(EXIT_FAILURE);
     }
 
     if (fork() == 0) {
-        dup2(pipe_in[READ], STDIN_FILENO); // redirect stdin to input pipe
-        close(pipe_in[WRITE]); // no need to write to input pipe here
-        dup2(pipe_out[WRITE], STDOUT_FILENO); // redirect stdout to output pipe
-        close(pipe_out[READ]); // no need to read output pipe here
+        dup2(pipe_in[READ], STDIN_FILENO); // replace standard input with input part of pipe_in
+        dup2(pipe_out[WRITE], STDOUT_FILENO); // replace standard output with output part of pipe_out
+        close(pipe_in[WRITE]); // close unused end of pipe_in
+        close(pipe_out[READ]); // close unused end of pipe_out
         n = execvp(cmd[0], cmd); // execute command
         exit(n);
     } else {
-        close(pipe_in[READ]); // no need to read input pipe here
+        close(pipe_in[READ]); // no need to read from input pipe here
         close(pipe_out[WRITE]); // no need to write to output pipe here
 
         while ((n = recv(source_sock, buffer, BUF_SIZE, 0)) > 0) { // read data from input socket

@@ -42,8 +42,19 @@
 #include <wait.h>
 
 #define BUF_SIZE 1024
+
 #define READ  0
 #define WRITE 1
+
+#define SERVER_SOCKET_ERROR -1
+#define SERVER_SETSOCKOPT_ERROR -2
+#define SERVER_BIND_ERROR -3
+#define SERVER_LISTEN_ERROR -4
+#define CLIENT_SOCKET_ERROR -5
+#define CLIENT_RESOLVE_ERROR -6
+#define CLIENT_CONNECT_ERROR -7
+#define CREATE_PIPE_ERROR -8
+#define BROKEN_PIPE_ERROR -9
 
 typedef enum {TRUE = 1, FALSE = 0} bool;
 
@@ -157,11 +168,11 @@ int create_socket(int port) {
     struct sockaddr_in server_addr;
 
     if ((server_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        return -1;
+        return SERVER_SOCKET_ERROR;
     }
 
     if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
-        return -1;
+        return SERVER_SETSOCKOPT_ERROR;
     }
 
     memset(&server_addr, 0, sizeof(server_addr));
@@ -170,11 +181,11 @@ int create_socket(int port) {
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0) {
-        return -1;
+        return SERVER_BIND_ERROR;
     }
 
     if (listen(server_sock, 20) < 0) {
-        return -1;
+        return SERVER_LISTEN_ERROR;
     }
 
     return server_sock;
@@ -197,7 +208,7 @@ void server_loop() {
     struct sockaddr_in client_addr;
     int addrlen = sizeof(client_addr);
 
-    while (1) {
+    while (TRUE) {
         client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &addrlen);
         if (fork() == 0) { // handle client connection in a separate process
             close(server_sock);
@@ -262,7 +273,7 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd[]) {
 
     if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) { // create command input and output pipes
         perror("Cannot create pipe");
-        exit(EXIT_FAILURE);
+        exit(CREATE_PIPE_ERROR);
     }
 
     if (fork() == 0) {
@@ -279,7 +290,7 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd[]) {
         while ((n = recv(source_sock, buffer, BUF_SIZE, 0)) > 0) { // read data from input socket
             if (write(pipe_in[WRITE], buffer, n) < 0) { // write data to input pipe of external command
                 perror("Cannot write to pipe");
-                exit(EXIT_FAILURE);
+                exit(BROKEN_PIPE_ERROR);
             }
             if ((i = read(pipe_out[READ], buffer, BUF_SIZE)) > 0) { // read command output
                 send(destination_sock, buffer, i, 0); // send data to output socket
@@ -301,12 +312,12 @@ int create_connection() {
     int sock;
 
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        return -2;
+        return CLIENT_SOCKET_ERROR;
     }
 
     if ((server = gethostbyname(remote_host)) == NULL) {
         errno = EFAULT;
-        return -3;
+        return CLIENT_RESOLVE_ERROR;
     }
 
     memset(&server_addr, 0, sizeof(server_addr));
@@ -315,7 +326,7 @@ int create_connection() {
     server_addr.sin_port = htons(remote_port);
 
     if (connect(sock, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
-        return -4;
+        return CLIENT_CONNECT_ERROR;
     }
 
     return sock;

@@ -64,15 +64,12 @@ void sigterm_handler(int signal);
 void server_loop();
 void handle_client(int client_sock, struct sockaddr_in client_addr);
 void forward_data(int source_sock, int destination_sock);
-void forward_data_ext(int source_sock, int destination_sock, char *cmd[]);
+void forward_data_ext(int source_sock, int destination_sock, char *cmd);
 int parse_options(int argc, char *argv[]);
-void string_to_array(char *str, char *array[]);
 
 int server_sock, client_sock, remote_sock, remote_port;
-char *remote_host;
+char *remote_host, *cmd_in, *cmd_out;
 bool opt_in = FALSE, opt_out = FALSE;
-char *cmd_in[100] = {NULL};
-char *cmd_out[100] = {NULL};
 
 /* Program start */
 int main(int argc, char *argv[]) {
@@ -110,7 +107,7 @@ int main(int argc, char *argv[]) {
 
 /* Parse command line options */
 int parse_options(int argc, char *argv[]) {
-    bool l,h,p;
+    bool l, h, p;
     int c, local_port;
 
     l = h = p = FALSE;
@@ -131,11 +128,11 @@ int parse_options(int argc, char *argv[]) {
                 break;
             case 'i':
                 opt_in = TRUE;
-                string_to_array(optarg, cmd_in);
+                cmd_in = optarg;
                 break;
             case 'o':
                 opt_out = TRUE;
-                string_to_array(optarg, cmd_out);
+                cmd_out = optarg;
                 break;
         }
     }
@@ -145,21 +142,6 @@ int parse_options(int argc, char *argv[]) {
     } else {
         return -1;
     }
-}
-
-/* Tokenize string into array by space */
-void string_to_array(char *str, char *array[]) {
-    char *p;
-    int c = 1, n;
-
-    array[0] = str;
-    for (p = str; *p != '\0'; ++p) {
-        if (*p == ' ') {
-            *p = '\0';
-            array[c++] = p+1;
-        }
-    }
-    array[c++] = NULL;
 }
 
 /* Create server socket */
@@ -267,7 +249,7 @@ void forward_data(int source_sock, int destination_sock) {
 }
 
 /* Forward data between sockets through external command */
-void forward_data_ext(int source_sock, int destination_sock, char *cmd[]) {
+void forward_data_ext(int source_sock, int destination_sock, char *cmd) {
     char buffer[BUF_SIZE];
     int n, i, pipe_in[2], pipe_out[2];
 
@@ -281,7 +263,7 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd[]) {
         dup2(pipe_out[WRITE], STDOUT_FILENO); // replace standard output with output part of pipe_out
         close(pipe_in[WRITE]); // close unused end of pipe_in
         close(pipe_out[READ]); // close unused end of pipe_out
-        n = execvp(cmd[0], cmd); // execute command
+        n = system(cmd); // execute command
         exit(n);
     } else {
         close(pipe_in[READ]); // no need to read from input pipe here

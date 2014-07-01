@@ -1,6 +1,6 @@
 ## Description
 
-This is a simple proxy daemon that allows you to forward TCP requests hitting a specified port on a local host to a different port on another host. It is written in ANSI C so it takes a very little space and can be used on embedded devices.
+This is a simple proxy daemon that allows you to forward TCP requests hitting a specified port on the localhost to a different port on another host. It is written in ANSI C so it takes a very little space and can be used on embedded devices.
 
 ## Installation
 
@@ -10,7 +10,9 @@ To build an executable for Tomato firmware (http://www.polarcloud.com/tomato) yo
 ```
 git clone git://repo.or.cz/tomato.git tomato
 ```
-and follow instructions in the "tools/README.TXT" file. Next, build proxy for Tomato with:
+and follow instructions in the "tools/README.TXT" file.
+
+Next, build proxy for Tomato with:
 ```
 make tomato
 ```
@@ -56,7 +58,7 @@ Last, set up the proxy:
 ```
 proxy -l 8080 -h www.wikipedia.org -p 80 -o "tee fifo0 fifo1"
 ```
-Now when you send a request through the proxy you should see it on all terminals where you set up the listeners:
+Now when you send a request through the proxy, you should see it on all terminals where you set up the listeners:
 ```
 curl -i http://localhost:8080
 ```

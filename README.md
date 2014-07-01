@@ -49,8 +49,8 @@ mkfifo fifo1
 ```
 Next, start reading data in loop from the pipes and forwarding it to the listeners (run these commands in separate terminals also):
 ```
-while true; do cat fifo0 | nc 192.168.0.10 9000; done
-while true; do cat fifo1 | nc 192.168.0.11 9001; done
+while true; do cat fifo0 | nc localhost 9000; done
+while true; do cat fifo1 | nc localhost 9001; done
 ```
 Last, set up the proxy:
 ```

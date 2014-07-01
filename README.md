@@ -17,7 +17,7 @@ Next, build proxy for Tomato with:
 make tomato
 ```
 
-## Usage
+## Basic usage
 
 Command line syntax goes as follows:
 ```
@@ -29,7 +29,7 @@ proxy -l 8080 -h 192.168.1.2 -p 80
 ```
 Input parser and output parser are commands through which incoming and outgoing packets can be forwarded. For example to use a "tee" command to log all incoming http data to incoming.txt file you can start proxy with the following options:
 ```
-proxy -l 8080 -h 192.168.1.2 -p 80 -i "tee -a incoming.txt"
+proxy -l 8080 -h 192.168.1.2 -p 80 -i "tee -a input.log" -o "tee -a output.log"
 ```
 The parser command will receive data from socket to its standard input and should send parsed data to the standard output. It should also flush its output at a reasonable rate to not withhold network communication.
 
@@ -56,10 +56,22 @@ while true; do cat fifo1 | nc localhost 9001; done
 ```
 Last, set up the proxy:
 ```
-proxy -l 8080 -h www.wikipedia.org -p 80 -o "tee fifo0 fifo1"
+proxy -l 8080 -h www.example.com -p 80 -o "tee fifo0 fifo1"
 ```
 Now when you send a request through the proxy, you should see it on all terminals where you set up the listeners:
 ```
 curl -i http://localhost:8080
 ```
 **Important notice:** Make sure to read data from all the pipes. If you don't, tee will stuck on writing to the pipe which is not being read from, and so the proxy will be stuck also. Also if you restart a listener, netcat may not reconnect to it, which means that you will need to restart the appropriate forwarder script, too.
+
+## Local http proxy
+
+Check ip address of the host you want to connect to:
+```
+ping www.example.com
+```
+Add the IP to static hosts list ("/etc/hosts" on Linux, "C:\Windows\System32\Drivers\etc\hosts" on Windows). Start the proxy pointing to the IP (don't use domain name to avoid request loop):
+```
+sudo proxy -l 80 -h 93.184.216.119 -p 80 -i "tee input.log" -o "tee output.log"
+```
+Point your browser to http://www.example.com and watch the contents of input.log and output.log files.

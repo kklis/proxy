@@ -33,6 +33,17 @@ proxy -l 8080 -h 192.168.1.2 -p 80 -i "tee -a input.log" -o "tee -a output.log"
 ```
 The parser command will receive data from socket to its standard input and should send parsed data to the standard output. It should also flush its output at a reasonable rate to not withhold network communication.
 
+**Important notice:** Use *read* and *write* system calls instead of stdio functions like *fgets* or *puts* when designing a filter to avoid buffering problems:
+```
+char buf[BUF_SIZE];
+int n;
+
+while ((n = read(STDIN_FILENO, buf, BUF_SIZE)) > 0) {
+    write(STDOUT_FILENO, buf, n);
+}
+```
+You can read more on buffering issues at http://www.pixelbeat.org/programming/stdio_buffering/)
+
 ## Advanced usage
 
 You can use input and output parsers to copy incoming / outgoing traffic to other hosts (e.g. for monitoring reasons). Just use "tee" command to copy network packets to named pipes and then read from those pipes.

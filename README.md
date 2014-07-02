@@ -1,6 +1,6 @@
 ## Description
 
-This is a simple proxy daemon that allows you to forward TCP requests hitting a specified port on the localhost to a different port on another host. It is written in ANSI C so it takes a very little space and can be used on embedded devices.
+This is a simple proxy daemon that allows you to forward TCP requests hitting a specified port on the localhost to a different port on another host. It can also forward data through external commands (for logging, filtering or copying network traffic). It is written in ANSI C so it takes a very little space and can be used on embedded devices.
 
 ## Installation
 
@@ -23,10 +23,13 @@ Command line syntax goes as follows:
 ```
 proxy -l local_port -h remote_host -p remote_port [-i "input parser"] [-o "output parser"]
 ```
-Suppose you want to open port 8080 on a public host and forward all TCP packets to port 80 on machine 192.168.1.2 in the local network. In this case you install proxy on a public host and run it the following command:
+Suppose you want to open port 8080 on a public host and forward all TCP packets to port 80 on machine 192.168.1.2 in the local network. In this case you will install proxy on a public host and run it the following command:
 ```
 proxy -l 8080 -h 192.168.1.2 -p 80
 ```
+
+## Parsers
+
 Input parser and output parser are commands through which incoming and outgoing packets can be forwarded. For example to use a "tee" command to log all incoming http data to incoming.txt file you can start proxy with the following options:
 ```
 proxy -l 8080 -h 192.168.1.2 -p 80 -i "tee -a input.log" -o "tee -a output.log"
@@ -42,9 +45,11 @@ while ((n = read(STDIN_FILENO, buf, BUF_SIZE)) > 0) {
     write(STDOUT_FILENO, buf, n);
 }
 ```
-You can read more on buffering issues at http://www.pixelbeat.org/programming/stdio_buffering/)
+You can read more on buffering issues at http://www.pixelbeat.org/programming/stdio_buffering/
 
 ## Advanced usage
+
+### Using parsers to copy network traffic to multiple hosts
 
 You can use input and output parsers to copy incoming / outgoing traffic to other hosts (e.g. for monitoring reasons). Just use "tee" command to copy network packets to named pipes and then read from those pipes.
 
@@ -75,7 +80,7 @@ curl -i http://localhost:8080
 ```
 **Important notice:** Make sure to read data from all the pipes. If you don't, tee will stuck on writing to the pipe which is not being read from, and so the proxy will be stuck also. Also if you restart a listener, netcat may not reconnect to it, which means that you will need to restart the appropriate forwarder script, too.
 
-## Local http proxy
+### Local http proxy with traffic logging
 
 Check ip address of the host you want to connect to:
 ```

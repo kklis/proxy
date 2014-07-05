@@ -4,7 +4,7 @@ This is a simple proxy daemon that allows you to forward TCP requests hitting a 
 
 ## Installation
 
-On Linux compile the software using "make". On Windows use "make" from Cygwin (http://cygwin.com).
+On Linux compile the software using "make". On Windows use "make" from Cygwin (http://cygwin.com). MinGW will not work, as it does not support *fork()* and *waitpid()*.
 
 To build an executable for Tomato firmware (http://www.polarcloud.com/tomato) you need to have the mipsel toolchain installed. Fetch it with git:
 ```
@@ -49,9 +49,9 @@ You can read more on buffering issues at http://www.pixelbeat.org/programming/st
 
 ## Advanced usage
 
-### Using parsers to copy network traffic to multiple hosts
+### Using parsers to replicate network traffic
 
-You can use input and output parsers to copy incoming / outgoing traffic to other hosts (e.g. for monitoring reasons). Just use "tee" command to copy network packets to named pipes and then read from those pipes.
+You can use input and output parsers to copy incoming / outgoing traffic to other hosts (e.g. for monitoring reasons). Just use "tee" command to replicate network packets to named pipes and then read from those pipes.
 
 The following scenario assumes you set up the program on local port 8080 as a proxy to www.wikipedia.org, and copy all outgoing requests to servers listening on ports 9000 and 9001 on localhost.
 

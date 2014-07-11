@@ -16,6 +16,17 @@ Next, build proxy for Tomato with:
 ```
 make tomato
 ```
+For OpenWRT firmware (http://openwrt.org) you can find right toolchains in folders with corresponding firmware images. For example, the Backfire toolchain for Broadcom chipset can be found at http://downloads.openwrt.org/backfire/10.03.1/brcm-2.4 in the *OpenWrt-Toolchain-brcm-2.4-for-mipsel-gcc-3.4.6_uClibc-0.9.30.1.tar.bz2* archive.
+
+Make the software with:
+```
+make openwrt
+```
+when using Whiterussian and Kamikaze toolchains, or
+```
+make backfire
+```
+when using the Backfire toolchain.
 
 ## Basic usage
 

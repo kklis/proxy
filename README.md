@@ -47,7 +47,7 @@ proxy -l 8080 -h 192.168.1.2 -p 80 -i "tee -a input.log" -o "tee -a output.log"
 ```
 The parser command will receive data from socket to its standard input and should send parsed data to the standard output. It should also flush its output at a reasonable rate to not withhold network communication.
 
-**Important notice:** Use *read* and *write* system calls instead of stdio functions like *fgets* or *puts* when designing a filter to avoid buffering problems:
+**Important notice:** Use *read* and *write* system calls instead of stdio functions like *fgets* or *puts* when designing a parser to avoid buffering problems:
 ```
 char buf[BUF_SIZE];
 int n;

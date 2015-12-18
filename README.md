@@ -32,11 +32,15 @@ when using the Backfire toolchain.
 
 Command line syntax goes as follows:
 ```
-proxy -l local_port -h remote_host -p remote_port [-i "input parser"] [-o "output parser"]
+proxy -l local_port -h remote_host -p remote_port [-i "input parser"] [-o "output parser"] [-f (stay in foreground)]
 ```
 Suppose you want to open port 8080 on a public host and forward all TCP packets to port 80 on machine 192.168.1.2 in the local network. In this case you will install proxy on a public host and run it the following command:
 ```
 proxy -l 8080 -h 192.168.1.2 -p 80
+```
+Normally, proxy forks into the background. To make it stay in the foreground (for example for debugging purposes), use "-f" switch:
+```
+proxy -l 8080 -h 192.168.1.2 -p 80 -f
 ```
 
 ## Parsers

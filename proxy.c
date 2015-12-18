@@ -68,9 +68,9 @@ void forward_data(int source_sock, int destination_sock);
 void forward_data_ext(int source_sock, int destination_sock, char *cmd);
 int parse_options(int argc, char *argv[]);
 
-int server_sock, client_sock, remote_sock, remote_port;
+int server_sock, client_sock, remote_sock, remote_port = 0;
 char *remote_host, *cmd_in, *cmd_out;
-bool opt_in = FALSE, opt_out = FALSE;
+bool foreground = FALSE;
 
 /* Program start */
 int main(int argc, char *argv[]) {
@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
     local_port = parse_options(argc, argv);
 
     if (local_port < 0) {
-        printf("Syntax: %s -l local_port -h remote_host -p remote_port [-i \"input parser\"] [-o \"output parser\"]\n", argv[0]);
+        printf("Syntax: %s -l local_port -h remote_host -p remote_port [-i \"input parser\"] [-o \"output parser\"] [-f (stay in foreground)]\n", argv[0]);
         return local_port;
     }
 
@@ -92,15 +92,19 @@ int main(int argc, char *argv[]) {
     signal(SIGCHLD, sigchld_handler); // prevent ended children from becoming zombies
     signal(SIGTERM, sigterm_handler); // handle KILL signal
 
-    switch(pid = fork()) {
-        case 0:
-            server_loop(); // daemonized child
-            break;
-        case -1:
-            perror("Cannot daemonize");
-            return pid;
-        default:
-            close(server_sock);
+    if (foreground) {
+        server_loop();
+    } else {
+        switch(pid = fork()) {
+            case 0: // deamonized child
+                server_loop();
+                break;
+            case -1: // error
+                perror("Cannot daemonize");
+                return pid;
+            default: // parent
+                close(server_sock);
+        }
     }
 
     return EXIT_SUCCESS;
@@ -108,37 +112,31 @@ int main(int argc, char *argv[]) {
 
 /* Parse command line options */
 int parse_options(int argc, char *argv[]) {
-    bool l, h, p;
-    int c, local_port;
+    int c, local_port = 0;
 
-    l = h = p = FALSE;
-
-    while ((c = getopt(argc, argv, "l:h:p:i:o:")) != -1) {
+    while ((c = getopt(argc, argv, "l:h:p:i:o:f")) != -1) {
         switch(c) {
             case 'l':
                 local_port = atoi(optarg);
-                l = TRUE;
                 break;
             case 'h':
                 remote_host = optarg;
-                h = TRUE;
                 break;
             case 'p':
                 remote_port = atoi(optarg);
-                p = TRUE;
                 break;
             case 'i':
                 cmd_in = optarg;
-                opt_in = TRUE;
                 break;
             case 'o':
                 cmd_out = optarg;
-                opt_out = TRUE;
                 break;
+            case 'f':
+                foreground = TRUE;
         }
     }
 
-    if (l && h && p) {
+    if (local_port && remote_host && remote_port) {
         return local_port;
     } else {
         return SYNTAX_ERROR;
@@ -212,7 +210,7 @@ void handle_client(int client_sock, struct sockaddr_in client_addr)
     }
 
     if (fork() == 0) { // a process forwarding data from client to remote socket
-        if (opt_out) {
+        if (cmd_out) {
             forward_data_ext(client_sock, remote_sock, cmd_out);
         } else {
             forward_data(client_sock, remote_sock);
@@ -221,7 +219,7 @@ void handle_client(int client_sock, struct sockaddr_in client_addr)
     }
 
     if (fork() == 0) { // a process forwarding data from remote socket to client
-        if (opt_in) {
+        if (cmd_in) {
             forward_data_ext(remote_sock, client_sock, cmd_in);
         } else {
             forward_data(remote_sock, client_sock);

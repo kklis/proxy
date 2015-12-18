@@ -55,6 +55,7 @@
 #define CLIENT_CONNECT_ERROR -7
 #define CREATE_PIPE_ERROR -8
 #define BROKEN_PIPE_ERROR -9
+#define SYNTAX_ERROR -10
 
 typedef enum {TRUE = 1, FALSE = 0} bool;
 
@@ -80,7 +81,7 @@ int main(int argc, char *argv[]) {
 
     if (local_port < 0) {
         printf("Syntax: %s -l local_port -h remote_host -p remote_port [-i \"input parser\"] [-o \"output parser\"]\n", argv[0]);
-        return 0;
+        return local_port;
     }
 
     if ((server_sock = create_socket(local_port)) < 0) { // start server
@@ -102,7 +103,7 @@ int main(int argc, char *argv[]) {
             close(server_sock);
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 /* Parse command line options */
@@ -127,12 +128,12 @@ int parse_options(int argc, char *argv[]) {
                 p = TRUE;
                 break;
             case 'i':
-                opt_in = TRUE;
                 cmd_in = optarg;
+                opt_in = TRUE;
                 break;
             case 'o':
-                opt_out = TRUE;
                 cmd_out = optarg;
+                opt_out = TRUE;
                 break;
         }
     }
@@ -140,7 +141,7 @@ int parse_options(int argc, char *argv[]) {
     if (l && h && p) {
         return local_port;
     } else {
-        return -1;
+        return SYNTAX_ERROR;
     }
 }
 

@@ -43,6 +43,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <wait.h>
+#ifdef USE_SYSTEMD
+#include <systemd/sd-daemon.h>
+#endif
 
 #define BUF_SIZE 16384
 
@@ -73,6 +76,7 @@ int create_connection();
 int parse_options(int argc, char *argv[]);
 
 int server_sock, client_sock, remote_sock, remote_port = 0;
+int connections_processed = 0;
 char *remote_host, *cmd_in, *cmd_out;
 bool foreground = FALSE;
 
@@ -176,9 +180,17 @@ int create_socket(int port) {
     return server_sock;
 }
 
+void update_connection_count()
+{
+#ifdef USE_SYSTEMD
+    sd_notifyf(0, "STATUS=Ready. %d connections processed.\n", connections_processed);
+#endif
+}
+
 /* Handle finished child process */
 void sigchld_handler(int signal) {
     while (waitpid(-1, NULL, WNOHANG) > 0);
+    update_connection_count();
 }
 
 /* Handle term signal */
@@ -193,13 +205,19 @@ void server_loop() {
     struct sockaddr_in client_addr;
     socklen_t addrlen = sizeof(client_addr);
 
+#ifdef USE_SYSTEMD
+    sd_notify(0, "READY=1\n");
+#endif
+
     while (TRUE) {
+        update_connection_count();
         client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &addrlen);
         if (fork() == 0) { // handle client connection in a separate process
             close(server_sock);
             handle_client(client_sock, client_addr);
             exit(0);
-        }
+        } else
+            connections_processed++;
         close(client_sock);
     }
 

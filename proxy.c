@@ -28,8 +28,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <libgen.h>
 #include <netdb.h>
 #include <resolv.h>
@@ -233,12 +235,34 @@ void handle_client(int client_sock, struct sockaddr_in client_addr)
 
 /* Forward data between sockets */
 void forward_data(int source_sock, int destination_sock) {
+    ssize_t n;
+
+#ifdef USE_SPLICE
+    int buf_pipe[2];
+
+    if (pipe(buf_pipe) == -1) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
+    }
+
+    while ((n = splice(source_sock, NULL, buf_pipe[WRITE], NULL, BUF_SIZE, SPLICE_F_MOVE)) > 0) {
+        if (splice(buf_pipe[READ], NULL, destination_sock, NULL, n, SPLICE_F_MOVE) < 0) {
+            perror("splice");
+            exit(EXIT_FAILURE);
+        }
+    }
+#else
     char buffer[BUF_SIZE];
-    int n;
 
     while ((n = recv(source_sock, buffer, BUF_SIZE, 0)) > 0) { // read data from input socket
         send(destination_sock, buffer, n, 0); // send data to output socket
     }
+#endif
+
+#ifdef USE_SPLICE
+    close(buf_pipe[0]);
+    close(buf_pipe[1]);
+#endif
 
     shutdown(destination_sock, SHUT_RDWR); // stop other processes from using socket
     close(destination_sock);

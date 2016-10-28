@@ -2,6 +2,7 @@
  * Tiny TCP proxy server
  *
  * Author: Krzysztof Kliś <krzysztof.klis@gmail.com>
+ * Fixes and improvements: Jérôme Poulin <jeromepoulin@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by

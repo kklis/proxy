@@ -41,7 +41,7 @@
 #include <unistd.h>
 #include <wait.h>
 
-#define BUF_SIZE 1024
+#define BUF_SIZE 16384
 
 #define READ  0
 #define WRITE 1
@@ -74,7 +74,7 @@ bool foreground = FALSE;
 
 /* Program start */
 int main(int argc, char *argv[]) {
-    int c, local_port;
+    int local_port;
     pid_t pid;
 
     local_port = parse_options(argc, argv);
@@ -187,7 +187,7 @@ void sigterm_handler(int signal) {
 /* Main server loop */
 void server_loop() {
     struct sockaddr_in client_addr;
-    int addrlen = sizeof(client_addr);
+    socklen_t addrlen = sizeof(client_addr);
 
     while (TRUE) {
         client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &addrlen);
@@ -206,7 +206,7 @@ void handle_client(int client_sock, struct sockaddr_in client_addr)
 {
     if ((remote_sock = create_connection()) < 0) {
         perror("Cannot connect to host");
-        return;
+        goto cleanup;
     }
 
     if (fork() == 0) { // a process forwarding data from client to remote socket
@@ -227,6 +227,7 @@ void handle_client(int client_sock, struct sockaddr_in client_addr)
         exit(0);
     }
 
+cleanup:
     close(remote_sock);
     close(client_sock);
 }

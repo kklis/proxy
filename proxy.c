@@ -145,7 +145,7 @@ int parse_options(int argc, char *argv[]) {
 
 /* Create server socket */
 int create_socket(int port) {
-    int server_sock, optval;
+    int server_sock, optval = 1;
     struct sockaddr_in server_addr;
 
     if ((server_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {

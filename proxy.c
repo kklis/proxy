@@ -43,7 +43,7 @@
 #include <unistd.h>
 #include <wait.h>
 
-#define BUF_SIZE 1024
+#define BUF_SIZE 16384
 
 #define READ  0
 #define WRITE 1
@@ -68,6 +68,7 @@ void server_loop();
 void handle_client(int client_sock, struct sockaddr_in client_addr);
 void forward_data(int source_sock, int destination_sock);
 void forward_data_ext(int source_sock, int destination_sock, char *cmd);
+int create_connection();
 int parse_options(int argc, char *argv[]);
 
 int server_sock, client_sock, remote_sock, remote_port = 0;
@@ -76,7 +77,7 @@ bool foreground = FALSE;
 
 /* Program start */
 int main(int argc, char *argv[]) {
-    int c, local_port;
+    int local_port;
     pid_t pid;
 
     local_port = parse_options(argc, argv);
@@ -147,7 +148,7 @@ int parse_options(int argc, char *argv[]) {
 
 /* Create server socket */
 int create_socket(int port) {
-    int server_sock, optval;
+    int server_sock, optval = 1;
     struct sockaddr_in server_addr;
 
     if ((server_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -189,7 +190,7 @@ void sigterm_handler(int signal) {
 /* Main server loop */
 void server_loop() {
     struct sockaddr_in client_addr;
-    int addrlen = sizeof(client_addr);
+    socklen_t addrlen = sizeof(client_addr);
 
     while (TRUE) {
         client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &addrlen);
@@ -208,7 +209,7 @@ void handle_client(int client_sock, struct sockaddr_in client_addr)
 {
     if ((remote_sock = create_connection()) < 0) {
         perror("Cannot connect to host");
-        return;
+        goto cleanup;
     }
 
     if (fork() == 0) { // a process forwarding data from client to remote socket
@@ -229,6 +230,7 @@ void handle_client(int client_sock, struct sockaddr_in client_addr)
         exit(0);
     }
 
+cleanup:
     close(remote_sock);
     close(client_sock);
 }

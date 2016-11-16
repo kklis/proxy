@@ -190,7 +190,6 @@ void update_connection_count()
 /* Handle finished child process */
 void sigchld_handler(int signal) {
     while (waitpid(-1, NULL, WNOHANG) > 0);
-    update_connection_count();
 }
 
 /* Handle term signal */

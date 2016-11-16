@@ -265,9 +265,9 @@ void forward_data(int source_sock, int destination_sock) {
         exit(EXIT_FAILURE);
     }
 
-    while ((n = splice(source_sock, NULL, buf_pipe[WRITE], NULL, BUF_SIZE, SPLICE_F_MOVE)) > 0) {
-        if (splice(buf_pipe[READ], NULL, destination_sock, NULL, n, SPLICE_F_MOVE) < 0) {
-            perror("splice");
+    while ((n = splice(source_sock, NULL, buf_pipe[WRITE], NULL, SSIZE_MAX, SPLICE_F_NONBLOCK|SPLICE_F_MOVE)) > 0) {
+        if (splice(buf_pipe[READ], NULL, destination_sock, NULL, SSIZE_MAX, SPLICE_F_MOVE) < 0) {
+            perror("write");
             exit(EXIT_FAILURE);
         }
     }
@@ -278,6 +278,9 @@ void forward_data(int source_sock, int destination_sock) {
         send(destination_sock, buffer, n, 0); // send data to output socket
     }
 #endif
+
+    if (n < 0)
+        perror("read");
 
 #ifdef USE_SPLICE
     close(buf_pipe[0]);

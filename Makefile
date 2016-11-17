@@ -1,10 +1,13 @@
+CFLAGS=-O2 -std=c99 -s -Wall -DUSE_SPLICE
+LDFLAGS=
+
 all:
-	gcc -O2 -s -o proxy proxy.c
+	gcc $(CFLAGS) -o proxy proxy.c $(LDFLAGS)
 tomato:
-	mipsel-uclibc-gcc -O2 -s -o proxy proxy.c
+	mipsel-uclibc-gcc $(CFLAGS) -o proxy proxy.c $(LDFLAGS)
 openwrt:
-	mipsel-linux-uclibc-gcc -O2 -s -o proxy proxy.c
+	mipsel-linux-uclibc-gcc $(CFLAGS) -o proxy proxy.c $(LDFLAGS)
 backfire:
-	mipsel-openwrt-linux-uclibc-gcc -O2 -s -o proxy proxy.c
+	mipsel-openwrt-linux-uclibc-gcc $(CFLAGS) -o proxy proxy.c $(LDFLAGS)
 clean:
-	rm -rf proxy proxy.exe
+	rm -f proxy proxy.exe

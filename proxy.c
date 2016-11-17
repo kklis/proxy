@@ -44,7 +44,7 @@
 #include <sys/socket.h>
 #include <syslog.h>
 #include <unistd.h>
-#include <wait.h>
+#include <sys/wait.h>
 #ifdef USE_SYSTEMD
 #include <systemd/sd-daemon.h>
 #endif

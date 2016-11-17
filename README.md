@@ -4,7 +4,7 @@ This is a simple proxy daemon that allows you to forward TCP requests hitting a 
 
 ## Installation
 
-On Linux compile the software using "make". On Windows use "make" from Cygwin (http://cygwin.com). MinGW will not work, as it does not support *fork()* and *waitpid()*.
+On Linux compile the software using "make". On Mac OS X use "make darwin". On Windows use "make" from Cygwin (http://cygwin.com). MinGW will not work, as it does not support *fork()* and *waitpid()*.
 
 To build an executable for Tomato firmware (http://www.polarcloud.com/tomato) you need to have the mipsel toolchain installed. Fetch it with git:
 ```

@@ -37,10 +37,12 @@
 #include <netdb.h>
 #include <resolv.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <syslog.h>
 #include <unistd.h>
 #include <wait.h>
 #ifdef USE_SYSTEMD
@@ -74,11 +76,13 @@ void forward_data(int source_sock, int destination_sock);
 void forward_data_ext(int source_sock, int destination_sock, char *cmd);
 int create_connection();
 int parse_options(int argc, char *argv[]);
+void plog(int priority, const char *format, ...);
 
 int server_sock, client_sock, remote_sock, remote_port = 0;
 int connections_processed = 0;
 char *remote_host, *cmd_in, *cmd_out;
 bool foreground = FALSE;
+bool use_syslog = FALSE;
 
 /* Program start */
 int main(int argc, char *argv[]) {
@@ -88,12 +92,15 @@ int main(int argc, char *argv[]) {
     local_port = parse_options(argc, argv);
 
     if (local_port < 0) {
-        printf("Syntax: %s -l local_port -h remote_host -p remote_port [-i \"input parser\"] [-o \"output parser\"] [-f (stay in foreground)]\n", argv[0]);
+        printf("Syntax: %s -l local_port -h remote_host -p remote_port [-i \"input parser\"] [-o \"output parser\"] [-f (stay in foreground)] [-s (use syslog)]\n", argv[0]);
         return local_port;
     }
 
+    if (use_syslog)
+        openlog("proxy", LOG_PID, LOG_DAEMON);
+
     if ((server_sock = create_socket(local_port)) < 0) { // start server
-        perror("Cannot run server");
+        plog(LOG_CRIT, "Cannot run server: %m");
         return server_sock;
     }
 
@@ -108,12 +115,15 @@ int main(int argc, char *argv[]) {
                 server_loop();
                 break;
             case -1: // error
-                perror("Cannot daemonize");
+                plog(LOG_CRIT, "Cannot daemonize: %m");
                 return pid;
             default: // parent
                 close(server_sock);
         }
     }
+
+    if (use_syslog)
+        closelog();
 
     return EXIT_SUCCESS;
 }
@@ -122,7 +132,7 @@ int main(int argc, char *argv[]) {
 int parse_options(int argc, char *argv[]) {
     int c, local_port = 0;
 
-    while ((c = getopt(argc, argv, "l:h:p:i:o:f")) != -1) {
+    while ((c = getopt(argc, argv, "l:h:p:i:o:fs")) != -1) {
         switch(c) {
             case 'l':
                 local_port = atoi(optarg);
@@ -141,6 +151,10 @@ int parse_options(int argc, char *argv[]) {
                 break;
             case 'f':
                 foreground = TRUE;
+                break;
+            case 's':
+                use_syslog = TRUE;
+                break;
         }
     }
 
@@ -180,6 +194,24 @@ int create_socket(int port) {
     return server_sock;
 }
 
+/* Send log message to stderr or syslog */
+void plog(int priority, const char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+
+    if (use_syslog)
+        vsyslog(priority, format, ap);
+    else {
+        vfprintf(stderr, format, ap);
+        fprintf(stderr, "\n");
+    }
+
+    va_end(ap);
+}
+
+/* Update systemd status with connection count */
 void update_connection_count()
 {
 #ifdef USE_SYSTEMD
@@ -226,7 +258,7 @@ void server_loop() {
 void handle_client(int client_sock, struct sockaddr_in client_addr)
 {
     if ((remote_sock = create_connection()) < 0) {
-        perror("Cannot connect to host");
+        plog(LOG_ERR, "Cannot connect to host: %m");
         goto cleanup;
     }
 
@@ -261,14 +293,14 @@ void forward_data(int source_sock, int destination_sock) {
     int buf_pipe[2];
 
     if (pipe(buf_pipe) == -1) {
-        perror("pipe");
-        exit(EXIT_FAILURE);
+        plog(LOG_ERR, "pipe: %m");
+        exit(CREATE_PIPE_ERROR);
     }
 
     while ((n = splice(source_sock, NULL, buf_pipe[WRITE], NULL, SSIZE_MAX, SPLICE_F_NONBLOCK|SPLICE_F_MOVE)) > 0) {
         if (splice(buf_pipe[READ], NULL, destination_sock, NULL, SSIZE_MAX, SPLICE_F_MOVE) < 0) {
-            perror("write");
-            exit(EXIT_FAILURE);
+            plog(LOG_ERR, "write: %m");
+            exit(BROKEN_PIPE_ERROR);
         }
     }
 #else
@@ -279,8 +311,10 @@ void forward_data(int source_sock, int destination_sock) {
     }
 #endif
 
-    if (n < 0)
-        perror("read");
+    if (n < 0) {
+        plog(LOG_ERR, "read: %m");
+        exit(BROKEN_PIPE_ERROR);
+    }
 
 #ifdef USE_SPLICE
     close(buf_pipe[0]);
@@ -300,7 +334,7 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd) {
     int n, i, pipe_in[2], pipe_out[2];
 
     if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) { // create command input and output pipes
-        perror("Cannot create pipe");
+        plog(LOG_CRIT, "Cannot create pipe: %m");
         exit(CREATE_PIPE_ERROR);
     }
 
@@ -317,7 +351,7 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd) {
 
         while ((n = recv(source_sock, buffer, BUF_SIZE, 0)) > 0) { // read data from input socket
             if (write(pipe_in[WRITE], buffer, n) < 0) { // write data to input pipe of external command
-                perror("Cannot write to pipe");
+                plog(LOG_ERR, "Cannot write to pipe: %m");
                 exit(BROKEN_PIPE_ERROR);
             }
             if ((i = read(pipe_out[READ], buffer, BUF_SIZE)) > 0) { // read command output

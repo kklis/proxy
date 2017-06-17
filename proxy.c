@@ -80,7 +80,7 @@ void plog(int priority, const char *format, ...);
 
 int server_sock, client_sock, remote_sock, remote_port = 0;
 int connections_processed = 0;
-char *remote_host, *cmd_in, *cmd_out;
+char *bind_addr, *remote_host, *cmd_in, *cmd_out;
 bool foreground = FALSE;
 bool use_syslog = FALSE;
 
@@ -89,10 +89,12 @@ int main(int argc, char *argv[]) {
     int local_port;
     pid_t pid;
 
+    bind_addr = NULL;
+
     local_port = parse_options(argc, argv);
 
     if (local_port < 0) {
-        printf("Syntax: %s -l local_port -h remote_host -p remote_port [-i \"input parser\"] [-o \"output parser\"] [-f (stay in foreground)] [-s (use syslog)]\n", argv[0]);
+        printf("Syntax: %s [-b bind_address] -l local_port -h remote_host -p remote_port [-i \"input parser\"] [-o \"output parser\"] [-f (stay in foreground)] [-s (use syslog)]\n", argv[0]);
         return local_port;
     }
 
@@ -132,10 +134,13 @@ int main(int argc, char *argv[]) {
 int parse_options(int argc, char *argv[]) {
     int c, local_port = 0;
 
-    while ((c = getopt(argc, argv, "l:h:p:i:o:fs")) != -1) {
+    while ((c = getopt(argc, argv, "b:l:h:p:i:o:fs")) != -1) {
         switch(c) {
             case 'l':
                 local_port = atoi(optarg);
+                break;
+            case 'b':
+                bind_addr = optarg;
                 break;
             case 'h':
                 remote_host = optarg;
@@ -181,7 +186,11 @@ int create_socket(int port) {
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
-    server_addr.sin_addr.s_addr = INADDR_ANY;
+    if (bind_addr == NULL) {
+        server_addr.sin_addr.s_addr = INADDR_ANY;
+    } else {
+        server_addr.sin_addr.s_addr = inet_addr(bind_addr);
+    }
 
     if (bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0) {
         return SERVER_BIND_ERROR;

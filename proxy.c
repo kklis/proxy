@@ -3,6 +3,7 @@
  *
  * Author: Krzysztof Kliś <krzysztof.klis@gmail.com>
  * Fixes and improvements: Jérôme Poulin <jeromepoulin@gmail.com>
+ * IPv6 support: 04/2019 RafaelBF <rafaelbf@hotmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -71,7 +72,7 @@ int create_socket(int port);
 void sigchld_handler(int signal);
 void sigterm_handler(int signal);
 void server_loop();
-void handle_client(int client_sock, struct sockaddr_in client_addr);
+void handle_client(int client_sock, struct sockaddr_storage client_addr);
 void forward_data(int source_sock, int destination_sock);
 void forward_data_ext(int source_sock, int destination_sock, char *cmd);
 int create_connection();
@@ -83,6 +84,8 @@ int connections_processed = 0;
 char *bind_addr, *remote_host, *cmd_in, *cmd_out;
 bool foreground = FALSE;
 bool use_syslog = FALSE;
+
+#define BACKLOG 20 // how many pending connections queue will hold
 
 /* Program start */
 int main(int argc, char *argv[]) {
@@ -173,32 +176,72 @@ int parse_options(int argc, char *argv[]) {
 /* Create server socket */
 int create_socket(int port) {
     int server_sock, optval = 1;
-    struct sockaddr_in server_addr;
+    struct in6_addr bindaddr;
+    struct addrinfo hints, *res=NULL;
+    char portstr[12];
 
-    if ((server_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    memset(&hints, 0x00, sizeof(hints));
+    server_sock = -1;
+    if (bind_addr != NULL) {
+
+        hints.ai_flags    = AI_NUMERICSERV;
+        hints.ai_family   = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+
+        if (inet_pton(AF_INET, bind_addr, &bindaddr) == 1) // valid IPv4 text address?
+        {
+             hints.ai_family = AF_INET;
+             hints.ai_flags |= AI_NUMERICHOST;
+        }
+        else
+        {
+            if (inet_pton(AF_INET6, bind_addr, &bindaddr) == 1) // valid IPv6 text address?
+            {
+                hints.ai_family = AF_INET6;
+                hints.ai_flags |= AI_NUMERICHOST;
+            }
+        }
+    } // bind_addr
+    else
+    {
+        hints.ai_family = AF_INET6; // also allow ipv4 clients
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = AI_PASSIVE; // use my IP
+    }
+
+    sprintf(portstr, "%d", port);
+
+    if (getaddrinfo(bind_addr, portstr, &hints, &res) != 0)
+    {
+        hints.ai_family = AF_UNSPEC; // fall back
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = AI_PASSIVE; // use my IP
+        if (getaddrinfo(bind_addr, portstr, &hints, &res) != 0)
+        {
+            return CLIENT_RESOLVE_ERROR;
+        }
+    }
+
+    if ((server_sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
         return SERVER_SOCKET_ERROR;
     }
+
 
     if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
         return SERVER_SETSOCKOPT_ERROR;
     }
 
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    if (bind_addr == NULL) {
-        server_addr.sin_addr.s_addr = INADDR_ANY;
-    } else {
-        server_addr.sin_addr.s_addr = inet_addr(bind_addr);
-    }
-
-    if (bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0) {
+    if (bind(server_sock, res->ai_addr, res->ai_addrlen) == -1) {
+            close(server_sock);
         return SERVER_BIND_ERROR;
     }
 
-    if (listen(server_sock, 20) < 0) {
+    if (listen(server_sock, BACKLOG) < 0) {
         return SERVER_LISTEN_ERROR;
     }
+
+    if (res != NULL)
+        freeaddrinfo(res);
 
     return server_sock;
 }
@@ -242,7 +285,7 @@ void sigterm_handler(int signal) {
 
 /* Main server loop */
 void server_loop() {
-    struct sockaddr_in client_addr;
+    struct sockaddr_storage client_addr;
     socklen_t addrlen = sizeof(client_addr);
 
 #ifdef USE_SYSTEMD
@@ -258,14 +301,17 @@ void server_loop() {
             exit(0);
         } else
             connections_processed++;
+        
         close(client_sock);
     }
 
 }
 
+
 /* Handle client connection */
-void handle_client(int client_sock, struct sockaddr_in client_addr)
+void handle_client(int client_sock, struct sockaddr_storage client_addr)
 {
+
     if ((remote_sock = create_connection()) < 0) {
         plog(LOG_ERR, "Cannot connect to host: %m");
         goto cleanup;
@@ -378,27 +424,50 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd) {
 
 /* Create client connection */
 int create_connection() {
-    struct sockaddr_in server_addr;
-    struct hostent *server;
+    struct addrinfo hints, *res=NULL;
+    struct in6_addr serveraddr;
     int sock;
+    char portstr[12];
 
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        return CLIENT_SOCKET_ERROR;
+    memset(&hints, 0x00, sizeof(hints));
+    hints.ai_flags    = AI_NUMERICSERV;
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    sprintf(portstr, "%d", remote_port);
+
+    if (inet_pton(AF_INET, remote_host, &serveraddr) == 1) // valid IPv4 text address?
+    {
+         hints.ai_family = AF_INET;
+         hints.ai_flags |= AI_NUMERICHOST;
+    }
+    else
+    {
+        if (inet_pton(AF_INET6, remote_host, &serveraddr) == 1) // valid IPv6 text address?
+        {
+            hints.ai_family = AF_INET6;
+            hints.ai_flags |= AI_NUMERICHOST;
+        }
     }
 
-    if ((server = gethostbyname(remote_host)) == NULL) {
+    // get ip/host information
+    if (getaddrinfo(remote_host,portstr , &hints, &res) != 0)
+    {
         errno = EFAULT;
         return CLIENT_RESOLVE_ERROR;
     }
 
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-    server_addr.sin_port = htons(remote_port);
 
-    if (connect(sock, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+    if ((sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
+        return CLIENT_SOCKET_ERROR;
+    }
+
+    if (connect(sock, res->ai_addr, res->ai_addrlen) < 0) {
         return CLIENT_CONNECT_ERROR;
     }
+
+    if (res != NULL)
+      freeaddrinfo(res);
 
     return sock;
 }

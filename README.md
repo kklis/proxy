@@ -109,14 +109,15 @@ Point your browser to http://www.example.com and watch the contents of input.log
 
 ### IPv6 support
 
-The proxy normally will accept IPv4 and IPv6 connections if your system support it. You can even forward IPv6 clients to any legacy IPv4 service, all you need is to use IPv4 or IPv6 address on -h and -b parameters depending on case.
+The proxy normally will accept IPv4 and IPv6 connections if your system support it. 
+You can even forward IPv6 clients to any legacy IPv4 service, all you need is to use IPv4 or IPv6 address on -h and -b parameters depending on case.
 
-The option [-b bind_address] force binding on specifc socket.
+The option [-b bind_address] force binding on specifc socket. It must be a local interface address.
 
 
 Accepting IPv6 connections and forwarding to IPv6 service: (still accepting IPv4 connections)
 ```
-proxy -l 8080 -h fe80::20d:b9ff:fe12:7650 -p 8080
+proxy -l 8080 -h fdd0:beef:c4ea:2016::1 -p 8080
 ```
 
 Accepting IPv6 connections and forwarding to legacy IPv4 service: (still accepting IPv4 connections)
@@ -124,12 +125,12 @@ Accepting IPv6 connections and forwarding to legacy IPv4 service: (still accepti
 proxy -l 8080 -h 192.168.1.2 -p 8080
 ```
 
-Accepting IPv4 only connections and forwarding to IPv6 service: (-b local_interface_address )
+Accepting IPv4 only connections and forwarding to IPv6 service:
 ```
-proxy -l 8080 -b 192.168.1.1 -h fe80::20d:b9ff:fe12:7650 -p 8080
+proxy -l 8080 -b 192.168.1.1 -h fdd0:beef:c4ea:2016::1 -p 8080
 ```
 
-Accepting IPv4 only connections and forwarding to IPv4 service: (-b local_interface_address )
+Accepting IPv4 only connections and forwarding to IPv4 service:
 ```
 proxy -l 8080 -b 192.168.1.1 -h 192.168.1.2 -p 8080
 ```

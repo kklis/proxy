@@ -3,7 +3,7 @@
  *
  * Author: Krzysztof Kliś <krzysztof.klis@gmail.com>
  * Fixes and improvements: Jérôme Poulin <jeromepoulin@gmail.com>
- * IPv6 support: 04/2019 RafaelBF <rafaelbf@hotmail.com>
+ * IPv6 support: 04/2019 Rafael Ferrari <rafaelbf@hotmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -68,6 +68,7 @@
 
 typedef enum {TRUE = 1, FALSE = 0} bool;
 
+int check_ipversion(char * address);
 int create_socket(int port);
 void sigchld_handler(int signal);
 void sigterm_handler(int signal);
@@ -173,53 +174,54 @@ int parse_options(int argc, char *argv[]) {
     }
 }
 
+int check_ipversion(char * address)
+{
+/* Check for valid IPv4 or Iv6 string. Returns AF_INET for IPv4, AF_INET6 for IPv6 */
+
+    struct in6_addr bindaddr;
+
+    if (inet_pton(AF_INET, address, &bindaddr) == 1) {
+         return AF_INET;
+    } else {
+        if (inet_pton(AF_INET6, address, &bindaddr) == 1) {
+            return AF_INET6;
+        }
+    }
+    return 0;
+}
+
 /* Create server socket */
 int create_socket(int port) {
     int server_sock, optval = 1;
-    struct in6_addr bindaddr;
+    int validfamily=0;
     struct addrinfo hints, *res=NULL;
     char portstr[12];
 
     memset(&hints, 0x00, sizeof(hints));
     server_sock = -1;
+
+    hints.ai_flags    = AI_NUMERICSERV;   /* numeric service number, not resolve */
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    /* prepare to bind on specified numeric address */
     if (bind_addr != NULL) {
-
-        hints.ai_flags    = AI_NUMERICSERV;
-        hints.ai_family   = AF_UNSPEC;
-        hints.ai_socktype = SOCK_STREAM;
-
-        if (inet_pton(AF_INET, bind_addr, &bindaddr) == 1) // valid IPv4 text address?
-        {
-             hints.ai_family = AF_INET;
-             hints.ai_flags |= AI_NUMERICHOST;
+        /* check for numeric IP to specify IPv6 or IPv4 socket */
+        if (validfamily = check_ipversion(bind_addr)) {
+             hints.ai_family = validfamily;
+             hints.ai_flags |= AI_NUMERICHOST; /* bind_addr is a valid numeric ip, skip resolve */
         }
-        else
-        {
-            if (inet_pton(AF_INET6, bind_addr, &bindaddr) == 1) // valid IPv6 text address?
-            {
-                hints.ai_family = AF_INET6;
-                hints.ai_flags |= AI_NUMERICHOST;
-            }
-        }
-    } // bind_addr
-    else
-    {
-        hints.ai_family = AF_INET6; // also allow ipv4 clients
-        hints.ai_socktype = SOCK_STREAM;
-        hints.ai_flags = AI_PASSIVE; // use my IP
+    } else {
+        /* if bind_address is NULL, will bind to IPv6 wildcard */
+        hints.ai_family = AF_INET6; /* Specify IPv6 socket, also allow ipv4 clients */
+        hints.ai_flags |= AI_PASSIVE; /* Wildcard address */
     }
 
     sprintf(portstr, "%d", port);
 
-    if (getaddrinfo(bind_addr, portstr, &hints, &res) != 0)
-    {
-        hints.ai_family = AF_UNSPEC; // fall back
-        hints.ai_socktype = SOCK_STREAM;
-        hints.ai_flags = AI_PASSIVE; // use my IP
-        if (getaddrinfo(bind_addr, portstr, &hints, &res) != 0)
-        {
-            return CLIENT_RESOLVE_ERROR;
-        }
+    /* Check if specified socket is valid. Try to resolve address if bind_address is a hostname */
+    if (getaddrinfo(bind_addr, portstr, &hints, &res) != 0) {
+        return CLIENT_RESOLVE_ERROR;
     }
 
     if ((server_sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
@@ -425,38 +427,29 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd) {
 /* Create client connection */
 int create_connection() {
     struct addrinfo hints, *res=NULL;
-    struct in6_addr serveraddr;
     int sock;
+    int validfamily=0;
     char portstr[12];
 
     memset(&hints, 0x00, sizeof(hints));
-    hints.ai_flags    = AI_NUMERICSERV;
+
+    hints.ai_flags    = AI_NUMERICSERV; /* numeric service number, not resolve */
     hints.ai_family   = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
     sprintf(portstr, "%d", remote_port);
 
-    if (inet_pton(AF_INET, remote_host, &serveraddr) == 1) // valid IPv4 text address?
-    {
-         hints.ai_family = AF_INET;
-         hints.ai_flags |= AI_NUMERICHOST;
-    }
-    else
-    {
-        if (inet_pton(AF_INET6, remote_host, &serveraddr) == 1) // valid IPv6 text address?
-        {
-            hints.ai_family = AF_INET6;
-            hints.ai_flags |= AI_NUMERICHOST;
-        }
+    /* check for numeric IP to specify IPv6 or IPv4 socket */
+    if (validfamily = check_ipversion(remote_host)) {
+         hints.ai_family = validfamily;
+         hints.ai_flags |= AI_NUMERICHOST;  /* remote_host is a valid numeric ip, skip resolve */
     }
 
-    // get ip/host information
-    if (getaddrinfo(remote_host,portstr , &hints, &res) != 0)
-    {
+    /* Check if specified host is valid. Try to resolve address if remote_host is a hostname */
+    if (getaddrinfo(remote_host,portstr , &hints, &res) != 0) {
         errno = EFAULT;
         return CLIENT_RESOLVE_ERROR;
     }
-
 
     if ((sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
         return CLIENT_SOCKET_ERROR;

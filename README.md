@@ -110,7 +110,8 @@ Point your browser to http://www.example.com and watch the contents of input.log
 ### IPv6 support
 
 The proxy normally will accept IPv4 and IPv6 connections if your system support it. 
-You can even forward IPv6 clients to any legacy IPv4 service, all you need is to use IPv4 or IPv6 address on -h and -b parameters depending on case.
+You can even forward IPv6 clients to any legacy IPv4 service.
+By using numeric IPs on -b and -h parameters, proxy will use corresponding IPv4 or IPv6 socket to listen or connect.
 
 The option [-b bind_address] force binding on specifc socket. It must be a local interface address.
 

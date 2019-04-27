@@ -3,6 +3,7 @@
  *
  * Author: Krzysztof Kliś <krzysztof.klis@gmail.com>
  * Fixes and improvements: Jérôme Poulin <jeromepoulin@gmail.com>
+ * IPv6 support: 04/2019 Rafael Ferrari <rafaelbf@hotmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -67,11 +68,12 @@
 
 typedef enum {TRUE = 1, FALSE = 0} bool;
 
+int check_ipversion(char * address);
 int create_socket(int port);
 void sigchld_handler(int signal);
 void sigterm_handler(int signal);
 void server_loop();
-void handle_client(int client_sock, struct sockaddr_in client_addr);
+void handle_client(int client_sock, struct sockaddr_storage client_addr);
 void forward_data(int source_sock, int destination_sock);
 void forward_data_ext(int source_sock, int destination_sock, char *cmd);
 int create_connection();
@@ -83,6 +85,8 @@ int connections_processed = 0;
 char *bind_addr, *remote_host, *cmd_in, *cmd_out;
 bool foreground = FALSE;
 bool use_syslog = FALSE;
+
+#define BACKLOG 20 // how many pending connections queue will hold
 
 /* Program start */
 int main(int argc, char *argv[]) {
@@ -170,35 +174,76 @@ int parse_options(int argc, char *argv[]) {
     }
 }
 
+int check_ipversion(char * address)
+{
+/* Check for valid IPv4 or Iv6 string. Returns AF_INET for IPv4, AF_INET6 for IPv6 */
+
+    struct in6_addr bindaddr;
+
+    if (inet_pton(AF_INET, address, &bindaddr) == 1) {
+         return AF_INET;
+    } else {
+        if (inet_pton(AF_INET6, address, &bindaddr) == 1) {
+            return AF_INET6;
+        }
+    }
+    return 0;
+}
+
 /* Create server socket */
 int create_socket(int port) {
     int server_sock, optval = 1;
-    struct sockaddr_in server_addr;
+    int validfamily=0;
+    struct addrinfo hints, *res=NULL;
+    char portstr[12];
 
-    if ((server_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    memset(&hints, 0x00, sizeof(hints));
+    server_sock = -1;
+
+    hints.ai_flags    = AI_NUMERICSERV;   /* numeric service number, not resolve */
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    /* prepare to bind on specified numeric address */
+    if (bind_addr != NULL) {
+        /* check for numeric IP to specify IPv6 or IPv4 socket */
+        if (validfamily = check_ipversion(bind_addr)) {
+             hints.ai_family = validfamily;
+             hints.ai_flags |= AI_NUMERICHOST; /* bind_addr is a valid numeric ip, skip resolve */
+        }
+    } else {
+        /* if bind_address is NULL, will bind to IPv6 wildcard */
+        hints.ai_family = AF_INET6; /* Specify IPv6 socket, also allow ipv4 clients */
+        hints.ai_flags |= AI_PASSIVE; /* Wildcard address */
+    }
+
+    sprintf(portstr, "%d", port);
+
+    /* Check if specified socket is valid. Try to resolve address if bind_address is a hostname */
+    if (getaddrinfo(bind_addr, portstr, &hints, &res) != 0) {
+        return CLIENT_RESOLVE_ERROR;
+    }
+
+    if ((server_sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
         return SERVER_SOCKET_ERROR;
     }
+
 
     if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
         return SERVER_SETSOCKOPT_ERROR;
     }
 
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    if (bind_addr == NULL) {
-        server_addr.sin_addr.s_addr = INADDR_ANY;
-    } else {
-        server_addr.sin_addr.s_addr = inet_addr(bind_addr);
-    }
-
-    if (bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0) {
+    if (bind(server_sock, res->ai_addr, res->ai_addrlen) == -1) {
+            close(server_sock);
         return SERVER_BIND_ERROR;
     }
 
-    if (listen(server_sock, 20) < 0) {
+    if (listen(server_sock, BACKLOG) < 0) {
         return SERVER_LISTEN_ERROR;
     }
+
+    if (res != NULL)
+        freeaddrinfo(res);
 
     return server_sock;
 }
@@ -242,7 +287,7 @@ void sigterm_handler(int signal) {
 
 /* Main server loop */
 void server_loop() {
-    struct sockaddr_in client_addr;
+    struct sockaddr_storage client_addr;
     socklen_t addrlen = sizeof(client_addr);
 
 #ifdef USE_SYSTEMD
@@ -258,14 +303,17 @@ void server_loop() {
             exit(0);
         } else
             connections_processed++;
+        
         close(client_sock);
     }
 
 }
 
+
 /* Handle client connection */
-void handle_client(int client_sock, struct sockaddr_in client_addr)
+void handle_client(int client_sock, struct sockaddr_storage client_addr)
 {
+
     if ((remote_sock = create_connection()) < 0) {
         plog(LOG_ERR, "Cannot connect to host: %m");
         goto cleanup;
@@ -378,27 +426,41 @@ void forward_data_ext(int source_sock, int destination_sock, char *cmd) {
 
 /* Create client connection */
 int create_connection() {
-    struct sockaddr_in server_addr;
-    struct hostent *server;
+    struct addrinfo hints, *res=NULL;
     int sock;
+    int validfamily=0;
+    char portstr[12];
 
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        return CLIENT_SOCKET_ERROR;
+    memset(&hints, 0x00, sizeof(hints));
+
+    hints.ai_flags    = AI_NUMERICSERV; /* numeric service number, not resolve */
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    sprintf(portstr, "%d", remote_port);
+
+    /* check for numeric IP to specify IPv6 or IPv4 socket */
+    if (validfamily = check_ipversion(remote_host)) {
+         hints.ai_family = validfamily;
+         hints.ai_flags |= AI_NUMERICHOST;  /* remote_host is a valid numeric ip, skip resolve */
     }
 
-    if ((server = gethostbyname(remote_host)) == NULL) {
+    /* Check if specified host is valid. Try to resolve address if remote_host is a hostname */
+    if (getaddrinfo(remote_host,portstr , &hints, &res) != 0) {
         errno = EFAULT;
         return CLIENT_RESOLVE_ERROR;
     }
 
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-    server_addr.sin_port = htons(remote_port);
+    if ((sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
+        return CLIENT_SOCKET_ERROR;
+    }
 
-    if (connect(sock, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+    if (connect(sock, res->ai_addr, res->ai_addrlen) < 0) {
         return CLIENT_CONNECT_ERROR;
     }
+
+    if (res != NULL)
+      freeaddrinfo(res);
 
     return sock;
 }

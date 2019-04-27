@@ -106,3 +106,32 @@ Add the IP to static hosts list ("/etc/hosts" on Linux, "C:\Windows\System32\Dri
 sudo proxy -l 80 -h 93.184.216.119 -p 80 -i "tee input.log" -o "tee output.log"
 ```
 Point your browser to http://www.example.com and watch the contents of input.log and output.log files.
+
+### IPv6 support
+
+The proxy normally will accept IPv4 and IPv6 connections if your system support it. 
+You can even forward IPv6 clients to any legacy IPv4 service.
+By using numeric IPs on -b and -h parameters, proxy will use corresponding IPv4 or IPv6 socket to listen or connect.
+
+The option [-b bind_address] force binding on specifc socket. It must be a local interface address.
+
+
+Accepting IPv6 connections and forwarding to IPv6 service: (still accepting IPv4 connections)
+```
+proxy -l 8080 -h fdd0:beef:c4ea:2016::1 -p 8080
+```
+
+Accepting IPv6 connections and forwarding to legacy IPv4 service: (still accepting IPv4 connections)
+```
+proxy -l 8080 -h 192.168.1.2 -p 8080
+```
+
+Accepting IPv4 only connections and forwarding to IPv6 service:
+```
+proxy -l 8080 -b 192.168.1.1 -h fdd0:beef:c4ea:2016::1 -p 8080
+```
+
+Accepting IPv4 only connections and forwarding to IPv4 service:
+```
+proxy -l 8080 -b 192.168.1.1 -h 192.168.1.2 -p 8080
+```

@@ -102,8 +102,9 @@ int main(int argc, char *argv[]) {
         return local_port;
     }
 
-    if (use_syslog)
+    if (use_syslog) {
         openlog("proxy", LOG_PID, LOG_DAEMON);
+    }
 
     if ((server_sock = create_socket(local_port)) < 0) { // start server
         plog(LOG_CRIT, "Cannot run server: %m");
@@ -128,8 +129,9 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (use_syslog)
+    if (use_syslog) {
         closelog();
+    }
 
     return EXIT_SUCCESS;
 }
@@ -242,8 +244,9 @@ int create_socket(int port) {
         return SERVER_LISTEN_ERROR;
     }
 
-    if (res != NULL)
+    if (res != NULL) {
         freeaddrinfo(res);
+    }
 
     return server_sock;
 }
@@ -255,9 +258,9 @@ void plog(int priority, const char *format, ...)
 
     va_start(ap, format);
 
-    if (use_syslog)
+    if (use_syslog) {
         vsyslog(priority, format, ap);
-    else {
+    } else {
         vfprintf(stderr, format, ap);
         fprintf(stderr, "\n");
     }
@@ -301,9 +304,9 @@ void server_loop() {
             close(server_sock);
             handle_client(client_sock, client_addr);
             exit(0);
-        } else
+        } else {
             connections_processed++;
-        
+        }
         close(client_sock);
     }
 
@@ -459,9 +462,9 @@ int create_connection() {
         return CLIENT_CONNECT_ERROR;
     }
 
-    if (res != NULL)
-      freeaddrinfo(res);
+    if (res != NULL) {
+        freeaddrinfo(res);
+    }
 
     return sock;
 }
-/* vim: set et ts=4 sw=4: */

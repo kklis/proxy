@@ -12,5 +12,7 @@ backfire:
 	mipsel-openwrt-linux-uclibc-gcc $(CFLAGS) $(OPTFLAGS) -o proxy proxy.c $(LDFLAGS)
 darwin:
 	gcc $(CFLAGS) -o proxy proxy.c $(LDFLAGS)
+freebsd:
+	cc $(CFLAGS) -o proxy proxy.c $(LDFLAGS)
 clean:
 	rm -f proxy proxy.exe

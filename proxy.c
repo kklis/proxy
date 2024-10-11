@@ -239,6 +239,7 @@ int create_socket(int port) {
 
     if (bind(server_sock, res->ai_addr, res->ai_addrlen) == -1) {
         close(server_sock);
+        freeaddrinfo(res);
         return SERVER_BIND_ERROR;
     }
 

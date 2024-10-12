@@ -2,3 +2,4 @@ Krzysztof Kliś - original code base
 Jérôme Poulin - various fixes and performance improvements
 Maurizio Lombardi  - FreeBSD compilation fixes
 Rafael Ferrari - IPv6 support
+Gaurav Giri - memory leak fixes

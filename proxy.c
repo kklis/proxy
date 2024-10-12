@@ -228,20 +228,24 @@ int create_socket(int port) {
     }
 
     if ((server_sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
+        freeaddrinfo(res); // Free memory on failure
         return SERVER_SOCKET_ERROR;
     }
 
-
     if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+        freeaddrinfo(res);
         return SERVER_SETSOCKOPT_ERROR;
     }
 
     if (bind(server_sock, res->ai_addr, res->ai_addrlen) == -1) {
-            close(server_sock);
+        close(server_sock);
+        freeaddrinfo(res);
         return SERVER_BIND_ERROR;
     }
 
     if (listen(server_sock, BACKLOG) < 0) {
+        close(server_sock);
+        freeaddrinfo(res);
         return SERVER_LISTEN_ERROR;
     }
 
@@ -251,6 +255,7 @@ int create_socket(int port) {
 
     return server_sock;
 }
+
 
 /* Send log message to stderr or syslog */
 void plog(int priority, const char *format, ...)
@@ -456,10 +461,12 @@ int create_connection() {
     }
 
     if ((sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
+        freeaddrinfo(res);
         return CLIENT_SOCKET_ERROR;
     }
 
     if (connect(sock, res->ai_addr, res->ai_addrlen) < 0) {
+        freeaddrinfo(res); // Free memory on failure
         return CLIENT_CONNECT_ERROR;
     }
 
